@@ -1,0 +1,8 @@
+# Heres a comment
+*.psd
+*.pdf
+*.csv
+*.xlsx
+*.ipynb
+/test
+/spec
