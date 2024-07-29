@@ -2,6 +2,7 @@ import tensorflow as tf
 from flask import Flask, request, jsonify
 import numpy as np
 import logging
+import joblib
 
 app = Flask(__name__)
 
@@ -19,6 +20,10 @@ input_details_volume = interpreter_volume.get_input_details()
 output_details_volume = interpreter_volume.get_output_details()
 input_details_price = interpreter_price.get_input_details()
 output_details_price = interpreter_price.get_output_details()
+
+# Load scalers
+scaler_volume = joblib.load('scaler_volume.pkl')
+scaler_price = joblib.load('scaler_price.pkl')
 
 def predict_volume(input_data):
     try:
@@ -62,6 +67,10 @@ def predict():
 
         logging.info(f'Volume prediction: {volume_prediction}')
         logging.info(f'Price prediction: {price_prediction}')
+
+        # Inverse transform the predictions
+        volume_prediction = scaler_volume.inverse_transform(volume_prediction).tolist()
+        price_prediction = scaler_price.inverse_transform(price_prediction).tolist()
 
         return jsonify({
             'volume_prediction': volume_prediction,
