@@ -11,7 +11,8 @@ logging.basicConfig(level=logging.INFO)
 
 def fit_predict_volume(input_data):
     try:
-        model = ExponentialSmoothing(input_data, trend='add', seasonal='add', seasonal_periods=6)
+        seasonal_periods = 2
+        model = ExponentialSmoothing(input_data, trend='add', seasonal='add', seasonal_periods=seasonal_periods)
         model_fit = model.fit()
         prediction = model_fit.forecast(steps=1)
         return prediction
@@ -21,7 +22,8 @@ def fit_predict_volume(input_data):
 
 def fit_predict_price(input_data):
     try:
-        model = ExponentialSmoothing(input_data, trend='add', seasonal='add', seasonal_periods=6)
+        seasonal_periods = 2
+        model = ExponentialSmoothing(input_data, trend='add', seasonal='add', seasonal_periods=seasonal_periods)
         model_fit = model.fit()
         prediction = model_fit.forecast(steps=1)
         return prediction
