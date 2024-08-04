@@ -1,31 +1,29 @@
 from flask import Flask, request, jsonify
 import numpy as np
 import logging
-import joblib
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.preprocessing import MinMaxScaler
 
 app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Load models and scalers
-hw_model_volume_fit = joblib.load('hw_model_volume.pkl')
-hw_model_price_fit = joblib.load('hw_model_price.pkl')
-scaler_volume = joblib.load('scaler_volume.pkl')
-scaler_price = joblib.load('scaler_price.pkl')
-
-def predict_volume(input_data):
+def fit_predict_volume(input_data):
     try:
-        prediction = hw_model_volume_fit.forecast(steps=1)
+        model = ExponentialSmoothing(input_data, trend='add', seasonal='add', seasonal_periods=6)
+        model_fit = model.fit()
+        prediction = model_fit.forecast(steps=1)
         return prediction
     except Exception as e:
         logging.error(f"Error in volume prediction: {e}")
         return None
 
-def predict_price(input_data):
+def fit_predict_price(input_data):
     try:
-        prediction = hw_model_price_fit.forecast(steps=1)
+        model = ExponentialSmoothing(input_data, trend='add', seasonal='add', seasonal_periods=6)
+        model_fit = model.fit()
+        prediction = model_fit.forecast(steps=1)
         return prediction
     except Exception as e:
         logging.error(f"Error in price prediction: {e}")
@@ -42,17 +40,22 @@ def predict():
         logging.info(f'Received volume input: {volume_input}')
         logging.info(f'Received price input: {price_input}')
 
-        # Since Holt-Winters is used for time series forecasting,
-        # the input to the predict function is not used directly in the model's predict method.
-        volume_prediction = predict_volume(volume_input)
-        price_prediction = predict_price(price_input)
+        # Fit scalers on the input data
+        scaler_volume = MinMaxScaler()
+        scaler_price = MinMaxScaler()
+        volume_input_scaled = scaler_volume.fit_transform(volume_input)
+        price_input_scaled = scaler_price.fit_transform(price_input)
 
-        if volume_prediction is None or price_prediction is None:
+        # Fit and predict using the Holt-Winters model
+        volume_prediction_scaled = fit_predict_volume(volume_input_scaled)
+        price_prediction_scaled = fit_predict_price(price_input_scaled)
+
+        if volume_prediction_scaled is None or price_prediction_scaled is None:
             return jsonify({'error': 'Prediction error'}), 500
 
         # Inverse transform the predictions
-        volume_prediction = scaler_volume.inverse_transform(volume_prediction.reshape(-1, 1)).tolist()
-        price_prediction = scaler_price.inverse_transform(price_prediction.reshape(-1, 1)).tolist()
+        volume_prediction = scaler_volume.inverse_transform(volume_prediction_scaled.reshape(-1, 1)).tolist()
+        price_prediction = scaler_price.inverse_transform(price_prediction_scaled.reshape(-1, 1)).tolist()
 
         logging.info(f'Volume prediction: {volume_prediction}')
         logging.info(f'Price prediction: {price_prediction}')
