@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import numpy as np
 import logging
 import joblib
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 app = Flask(__name__)
 
@@ -41,6 +42,8 @@ def predict():
         logging.info(f'Received volume input: {volume_input}')
         logging.info(f'Received price input: {price_input}')
 
+        # Since Holt-Winters is used for time series forecasting,
+        # the input to the predict function is not used directly in the model's predict method.
         volume_prediction = predict_volume(volume_input)
         price_prediction = predict_price(price_input)
 
