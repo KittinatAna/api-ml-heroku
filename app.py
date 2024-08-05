@@ -1,77 +1,68 @@
 from flask import Flask, request, jsonify
 import numpy as np
 import logging
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
 
 app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Define the LSTM model
-def build_lstm_model(input_shape):
-    model = tf.keras.Sequential([
-        tf.keras.layers.LSTM(50, return_sequences=True, input_shape=input_shape),
-        tf.keras.layers.LSTM(50, return_sequences=False),
-        tf.keras.layers.Dense(1)
-    ])
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    return model
+def fit_predict_volume(input_data):
+    try:
+        model = ExponentialSmoothing(input_data, trend=None, seasonal=None)
+        model_fit = model.fit()
+        prediction = model_fit.forecast(steps=1)
+        return prediction
+    except Exception as e:
+        logging.error(f"Error in volume prediction: {e}")
+        return None
 
-@app.route('/')
-def home():
-    return "Welcome to the Coffee Price and Volume Prediction API!"
+def fit_predict_price(input_data):
+    try:
+        model = ExponentialSmoothing(input_data, trend=None, seasonal=None)
+        model_fit = model.fit()
+        prediction = model_fit.forecast(steps=1)
+        return prediction
+    except Exception as e:
+        logging.error(f"Error in price prediction: {e}")
+        return None
 
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.json
-
+    
     try:
         volume_input = np.array(data['volume_input'], dtype=np.float32).reshape(-1, 1)
         price_input = np.array(data['price_input'], dtype=np.float32).reshape(-1, 1)
 
-        logging.info(f"Volume input: {volume_input}")
-        logging.info(f"Price input: {price_input}")
+        logging.info(f'Received volume input: {volume_input}')
+        logging.info(f'Received price input: {price_input}')
 
-        time_steps = len(volume_input)
-
-        # Scale inputs
+        # Fit scalers on the input data
         scaler_volume = MinMaxScaler()
         scaler_price = MinMaxScaler()
+        volume_input_scaled = scaler_volume.fit_transform(volume_input)
+        price_input_scaled = scaler_price.fit_transform(price_input)
 
-        scaled_volume = scaler_volume.fit_transform(volume_input)
-        scaled_price = scaler_price.fit_transform(price_input)
+        # Fit and predict using the Holt-Winters model
+        volume_prediction_scaled = fit_predict_volume(volume_input_scaled)
+        price_prediction_scaled = fit_predict_price(price_input_scaled)
 
-        # Reshape data for LSTM
-        X_volume = scaled_volume.reshape(1, time_steps, 1)
-        X_price = scaled_price.reshape(1, time_steps, 1)
-
-        logging.info(f"Reshaped X_volume shape: {X_volume.shape}")
-        logging.info(f"Reshaped X_price shape: {X_price.shape}")
-
-        # Build and train the LSTM model for volume
-        model_volume = build_lstm_model((time_steps, 1))
-        model_volume.fit(X_volume, scaled_volume, epochs=50, batch_size=1, verbose=1)
-
-        # Build and train the LSTM model for price
-        model_price = build_lstm_model((time_steps, 1))
-        model_price.fit(X_price, scaled_price, epochs=50, batch_size=1, verbose=1)
-
-        # Predict the next month's value
-        volume_prediction = model_volume.predict(X_volume)
-        price_prediction = model_price.predict(X_price)
+        if volume_prediction_scaled is None or price_prediction_scaled is None:
+            return jsonify({'error': 'Prediction error'}), 500
 
         # Inverse transform the predictions
-        volume_prediction = scaler_volume.inverse_transform(volume_prediction).tolist()
-        price_prediction = scaler_price.inverse_transform(price_prediction).tolist()
+        volume_prediction = scaler_volume.inverse_transform(volume_prediction_scaled.reshape(-1, 1)).tolist()
+        price_prediction = scaler_price.inverse_transform(price_prediction_scaled.reshape(-1, 1)).tolist()
 
-        logging.info(f"Volume prediction: {volume_prediction}")
-        logging.info(f"Price prediction: {price_prediction}")
+        logging.info(f'Volume prediction: {volume_prediction}')
+        logging.info(f'Price prediction: {price_prediction}')
 
         return jsonify({
-            'volume_prediction': volume_prediction[0][0],
-            'price_prediction': price_prediction[0][0]
+            'volume_prediction': volume_prediction,
+            'price_prediction': price_prediction
         })
     except Exception as e:
         logging.error(f"Error during prediction: {e}")
