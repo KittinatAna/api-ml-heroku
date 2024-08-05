@@ -19,13 +19,6 @@ def build_lstm_model(input_shape):
     model.compile(optimizer='adam', loss='mean_squared_error')
     return model
 
-def create_dataset(data, time_steps=1):
-    X, y = [], []
-    for i in range(len(data) - time_steps):
-        X.append(data[i:i+time_steps])
-        y.append(data[i+time_steps])
-    return np.array(X), np.array(y)
-
 @app.route('/')
 def home():
     return "Welcome to the Coffee Price and Volume Prediction API!"
@@ -41,10 +34,7 @@ def predict():
         logging.info(f"Volume input: {volume_input}")
         logging.info(f"Price input: {price_input}")
 
-        time_steps = len(volume_input) - 1
-
-        if time_steps < 1:
-            raise ValueError("Not enough data points to create time steps.")
+        time_steps = len(volume_input)
 
         # Scale inputs
         scaler_volume = MinMaxScaler()
@@ -53,38 +43,24 @@ def predict():
         scaled_volume = scaler_volume.fit_transform(volume_input)
         scaled_price = scaler_price.fit_transform(price_input)
 
-        # Create datasets
-        X_volume, y_volume = create_dataset(scaled_volume, time_steps)
-        X_price, y_price = create_dataset(scaled_price, time_steps)
-
-        logging.info(f"X_volume shape: {X_volume.shape}, y_volume shape: {y_volume.shape}")
-        logging.info(f"X_price shape: {X_price.shape}, y_price shape: {y_price.shape}")
-
         # Reshape data for LSTM
-        X_volume = np.reshape(X_volume, (X_volume.shape[0], X_volume.shape[1], 1))
-        X_price = np.reshape(X_price, (X_price.shape[0], X_price.shape[1], 1))
+        X_volume = scaled_volume.reshape(1, time_steps, 1)
+        X_price = scaled_price.reshape(1, time_steps, 1)
 
         logging.info(f"Reshaped X_volume shape: {X_volume.shape}")
         logging.info(f"Reshaped X_price shape: {X_price.shape}")
 
-        # Train the LSTM model for volume
+        # Build and train the LSTM model for volume
         model_volume = build_lstm_model((time_steps, 1))
-        model_volume.fit(X_volume, y_volume, epochs=50, batch_size=1, verbose=1)
+        model_volume.fit(X_volume, scaled_volume, epochs=50, batch_size=1, verbose=1)
 
-        # Train the LSTM model for price
+        # Build and train the LSTM model for price
         model_price = build_lstm_model((time_steps, 1))
-        model_price.fit(X_price, y_price, epochs=50, batch_size=1, verbose=1)
+        model_price.fit(X_price, scaled_price, epochs=50, batch_size=1, verbose=1)
 
-        # Prepare the latest data point for prediction
-        latest_volume_input = scaled_volume[-time_steps:].reshape(1, time_steps, 1)
-        latest_price_input = scaled_price[-time_steps:].reshape(1, time_steps, 1)
-
-        logging.info(f"Latest volume input for prediction: {latest_volume_input}")
-        logging.info(f"Latest price input for prediction: {latest_price_input}")
-
-        # Predict
-        volume_prediction = model_volume.predict(latest_volume_input)
-        price_prediction = model_price.predict(latest_price_input)
+        # Predict the next month's value
+        volume_prediction = model_volume.predict(X_volume)
+        price_prediction = model_price.predict(X_price)
 
         # Inverse transform the predictions
         volume_prediction = scaler_volume.inverse_transform(volume_prediction).tolist()
