@@ -38,27 +38,39 @@ def predict():
         volume_input = np.array(data['volume_input'], dtype=np.float32).reshape(-1, 1)
         price_input = np.array(data['price_input'], dtype=np.float32).reshape(-1, 1)
 
-        time_steps = len(volume_input)
-        
+        logging.info(f"Volume input: {volume_input}")
+        logging.info(f"Price input: {price_input}")
+
+        time_steps = len(volume_input) - 1
+
+        if time_steps < 1:
+            raise ValueError("Not enough data points to create time steps.")
+
         # Scale inputs
         scaler_volume = MinMaxScaler()
         scaler_price = MinMaxScaler()
-        
+
         scaled_volume = scaler_volume.fit_transform(volume_input)
         scaled_price = scaler_price.fit_transform(price_input)
-        
+
         # Create datasets
         X_volume, y_volume = create_dataset(scaled_volume, time_steps)
         X_price, y_price = create_dataset(scaled_price, time_steps)
-        
+
+        logging.info(f"X_volume shape: {X_volume.shape}, y_volume shape: {y_volume.shape}")
+        logging.info(f"X_price shape: {X_price.shape}, y_price shape: {y_price.shape}")
+
         # Reshape data for LSTM
         X_volume = np.reshape(X_volume, (X_volume.shape[0], X_volume.shape[1], 1))
         X_price = np.reshape(X_price, (X_price.shape[0], X_price.shape[1], 1))
-        
+
+        logging.info(f"Reshaped X_volume shape: {X_volume.shape}")
+        logging.info(f"Reshaped X_price shape: {X_price.shape}")
+
         # Train the LSTM model for volume
         model_volume = build_lstm_model((time_steps, 1))
         model_volume.fit(X_volume, y_volume, epochs=50, batch_size=1, verbose=1)
-        
+
         # Train the LSTM model for price
         model_price = build_lstm_model((time_steps, 1))
         model_price.fit(X_price, y_price, epochs=50, batch_size=1, verbose=1)
@@ -67,6 +79,9 @@ def predict():
         latest_volume_input = scaled_volume[-time_steps:].reshape(1, time_steps, 1)
         latest_price_input = scaled_price[-time_steps:].reshape(1, time_steps, 1)
 
+        logging.info(f"Latest volume input for prediction: {latest_volume_input}")
+        logging.info(f"Latest price input for prediction: {latest_price_input}")
+
         # Predict
         volume_prediction = model_volume.predict(latest_volume_input)
         price_prediction = model_price.predict(latest_price_input)
@@ -74,6 +89,9 @@ def predict():
         # Inverse transform the predictions
         volume_prediction = scaler_volume.inverse_transform(volume_prediction).tolist()
         price_prediction = scaler_price.inverse_transform(price_prediction).tolist()
+
+        logging.info(f"Volume prediction: {volume_prediction}")
+        logging.info(f"Price prediction: {price_prediction}")
 
         return jsonify({
             'volume_prediction': volume_prediction[0][0],
